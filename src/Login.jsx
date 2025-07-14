@@ -1,9 +1,9 @@
 import { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import {jwtDecode} from "jwt-decode";
+import { jwtDecode } from "jwt-decode";
 
-export default function Login() {
+export default function Login({ onLoginSuccess }) {
   const [empID, setEmpID] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -14,69 +14,43 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     setError("");
+
     try {
       const res = await axios.post(
         "http://localhost:8091/usermanagement-service/api/user/login",
         { employeeId: empID, password },
         { headers: { "Content-Type": "application/json" } }
       );
-      // localStorage.setItem("token", res.data);
-      // localStorage.setItem("employeeId", empID);
-      
-      const token = res.data.token || res.data; // adjust if your backend returns {token: "..."}
+
+      const token = res.data.token || res.data; // support both { token: "..."} or plain string
       localStorage.setItem("token", token);
       localStorage.setItem("employeeId", empID);
 
       const decoded = jwtDecode(token);
-      localStorage.setItem("role", decoded.role); // adjust 'role' key as per your JWT payload
+      const role = decoded.role || "EMPLOYEE"; // fallback if not present
+      const name = decoded.name || empID; // use JWT name or empID
 
-      navigate("/dashboard");
-      
-    } catch (err) {
-        if (err.response && err.response.data) {
-          const errorMessage =
-            err.response.data.message || "Login failed. Please try again.";
-          setError(errorMessage);
-        } else {
-          setError("Network error. Please try again later.");
-        }
+      localStorage.setItem("role", role);
+
+      // ✅ Fire the login success handler for toast & confetti
+      if (onLoginSuccess) {
+        onLoginSuccess(name);
       }
+
+      // ✅ Navigate based on role
+      navigate("/dashboard");
+
+    } catch (err) {
+      if (err.response && err.response.data) {
+        const errorMessage = err.response.data.message || "Login failed. Please try again.";
+        setError(errorMessage);
+      } else {
+        setError("Network error. Please try again later.");
+      }
+    }
+
     setLoading(false);
   };
-
-  // Logout handler
-const handleLogout = async () => {
-  const employeeId = localStorage.getItem("employeeId");
-  const token = localStorage.getItem("token");
-  if (!employeeId) {
-    setError("No employee ID found for logout.");
-    return;
-  }
-  try {
-    await axios.post(
-      "http://localhost:8091/usermanagement-service/api/user/logout",
-      { employeeId },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
-    localStorage.clear();
-    setError(""); // clear any previous error
-    // Show a success message for 1 second, then redirect
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      alert("Logout successful!");
-      navigate("/login");
-    }, 1000);
-  } catch (err) {
-    console.error("Logout failed:", err);
-    setError("Logout failed. Please try again.");
-  }
-};
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-100 via-pink-100 to-yellow-100">
@@ -109,14 +83,6 @@ const handleLogout = async () => {
           {loading ? "Logging in..." : "Login"}
         </button>
         {error && <div className="text-red-600 text-center">{error}</div>}
-        {/* Example logout button for demonstration */}
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="mt-2 bg-red-500 text-white py-2 rounded-lg shadow hover:bg-red-600 transition"
-        >
-          Logout
-        </button>
       </form>
     </div>
   );
